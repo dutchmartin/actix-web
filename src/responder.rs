@@ -4,6 +4,9 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+#[cfg(feature = "askama-support")]
+use askama::Template;
+
 use actix_http::error::InternalError;
 use actix_http::http::{
     header::IntoHeaderValue, Error as HttpError, HeaderMap, HeaderName, StatusCode,
@@ -211,6 +214,29 @@ impl Responder for BytesMut {
         ok(Response::build(StatusCode::OK)
             .content_type("application/octet-stream")
             .body(self))
+    }
+}
+
+#[cfg(feature = "askama-support")]
+impl<'a> Responder for &'a dyn Template {
+    type Error = actix_http::error::Error;
+    type Future = Ready<Result<Response, Error>>;
+
+    fn respond_to(self, _: &HttpRequest) -> Self::Future {
+        match self.render() {
+            Ok(body) => {
+                ok(Response::build(StatusCode::OK)
+                    .content_type("text/html")
+                    .body(body)
+                )
+            },
+            Err(askama_error) => {
+                ok(Response::build(StatusCode::INTERNAL_SERVER_ERROR)
+                    .content_type("text/plain; charset=utf-8")
+                    .body(askama_error.to_string())
+                )
+            }
+        }
     }
 }
 
